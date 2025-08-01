@@ -271,7 +271,7 @@ class BurgersEquationApp(QMainWindow):
         self.x_values = []
         self.current_params = {}
         self.need_recalculate = True
-        self.cmap = 'rainbow'  # цветовая гамма
+        self.cmap = 'viridis'  # цветовая гамма
         self.global_max_diff = 0.0  # Максимальное отклонение по всей сетке
         self.y_min, self.y_max = -1.5, 1.5
         self.initUI()
@@ -868,32 +868,66 @@ class BurgersEquationApp(QMainWindow):
         except Exception as e:
             print(f"Ошибка при отрисовке слоя: {e}")
 
+    def create_statistics_text(self, stats):
+        """Форматирует статистику в текстовый блок"""
+        return (
+            f"Нач. условие: {stats['ic']}\n"
+            f"Время слоя: {stats['time_point']:.6f}\n"
+            f"Макс. отклонение (слой): {stats['max_diff']:.6f}\n"
+            f"Макс. отклонение (вся сетка): {stats['global_max_diff']:.6f}\n"
+            f"Место макс. откл. (слой, узел): {stats['max_diff_loc']}\n"
+            f"Среднее отклонение: {stats['mean_diff']:.6f}\n"
+            f"Значение источника: {stats['source_val']:.4f}\n"
+            f"Размер сетки: {stats['grid_size']}"
+        )
+
+
     def update_stats(self, layer_index):
         """Обновление статистики для текущего слоя"""
-        self.stats_ic.setText(self.ic_combo.currentText())
-        self.stats_time_point.setText(f"{self.time_points[layer_index]:.6f}")
+        stats = {
+            'ic': self.ic_combo.currentText(),
+            'time_point': self.time_points[layer_index] if self.time_points else 0.0,
+            'max_diff': 0.0,
+            'global_max_diff': self.global_max_diff,
+            'max_diff_loc': '-',
+            'mean_diff': 0.0,
+            'source_val': 0.0,
+            'grid_size': f"Основная: {len(self.x_values)}×{len(self.solution_history)}, "
+                        f"Контрольная: {len(self.control_solution_history[0]) if self.control_solution_history else 0}×"
+                        f"{len(self.control_solution_history) if self.control_solution_history else 0}"
+        }
         
-        if not self.solution_history or not self.control_solution_history:
-            return
+        if self.solution_history and self.control_solution_history and layer_index < len(self.solution_history):
+            u_control = self.control_solution_history[layer_index]
+            x_control = np.linspace(0, 1, len(u_control))
+            u_interp = np.interp(self.x_values, x_control, u_control)
             
-        u_control = self.control_solution_history[layer_index]
-        x_control = np.linspace(0, 1, len(u_control))
-        u_interp = np.interp(self.x_values, x_control, u_control)
+            u_main = self.solution_history[layer_index]
+            diff = np.abs(u_interp - u_main)
+            max_diff = np.max(diff)
+            max_idx = np.argmax(diff)
+            mean_diff = np.mean(diff)
+            
+            source_val = self.source_function(self.time_points[layer_index])
+            
+            stats.update({
+                'max_diff': max_diff,
+                'mean_diff': mean_diff,
+                'max_diff_loc': f"{layer_index}, {max_idx}",
+                'source_val': source_val
+            })
         
-        u_main = self.solution_history[layer_index]
-        diff = np.abs(u_interp - u_main)
-        max_diff = np.max(diff)
-        max_idx = np.argmax(diff)
-        mean_diff = np.mean(diff)
+        self.stats_ic.setText(stats['ic'])
+        self.stats_time_point.setText(f"{stats['time_point']:.6f}")
+        self.stats_max_diff.setText(f"{stats['max_diff']:.6f}")
+        self.stats_global_max_diff.setText(f"{stats['global_max_diff']:.6f}")
+        self.stats_max_diff_loc.setText(stats['max_diff_loc'])
+        self.stats_mean_diff.setText(f"{stats['mean_diff']:.6f}")
+        self.stats_source_val.setText(f"{stats['source_val']:.4f}")
+        self.stats_grid_size.setText(stats['grid_size'])
         
-        source_val = self.source_function(self.time_points[layer_index])
-        
-        self.stats_max_diff.setText(f"{max_diff:.6f}")
-        self.stats_global_max_diff.setText(f"{self.global_max_diff:.6f}")
-        self.stats_max_diff_loc.setText(f"{layer_index}, {max_idx}")
-        self.stats_mean_diff.setText(f"{mean_diff:.6f}")
-        self.stats_source_val.setText(f"{source_val:.4f}")
-
+        return stats
+    
     "функция показа таблицы решений"
     def show_solution_table(self):
         if not self.solution_history or not self.control_solution_history:
@@ -1044,22 +1078,71 @@ class BurgersEquationApp(QMainWindow):
                 QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении: {str(e)}")
     
     def save_layer_plot(self):
-        """Сохраняет график текущего слоя в файл"""
+        """Сохраняет график слоя со статистикой в файл"""
         if not self.solution_history:
             QMessageBox.warning(self, "Ошибка", "Нет данных для сохранения!")
             return
             
+        layer_index = self.layer_input.value()
+        stats = self.update_stats(layer_index)
+        
+        save_fig = plt.figure(figsize=(12, 6), tight_layout=True)
+        gs = save_fig.add_gridspec(1, 2, width_ratios=[2, 1])
+        
+        ax1 = save_fig.add_subplot(gs[0])
+        t = self.time_points[layer_index]
+        x = self.x_values
+        u = self.solution_history[layer_index]
+        
+        ax1.plot(x, u, 'b-', label="Основная сетка")
+        
+        if self.grid_cb.isChecked() and self.control_solution_history:
+            u_control = self.control_solution_history[layer_index]
+            x_control = np.linspace(0, 1, len(u_control))
+            u_interp = np.interp(x, x_control, u_control)
+            ax1.plot(x, u_interp, 'r--', linewidth=1, label="Контрольная сетка")
+        
+        if self.show_ic_cb.isChecked():
+            ic = self.get_initial_condition(self.x_values)
+            ax1.plot(x, ic, 'g--', label="Начальное условие")
+        
+        ax1.set_title(f"Слой {layer_index}, t = {t:.4f} с")
+        ax1.set_xlabel("Пространство, x [м]")
+        ax1.set_ylabel("Теплота, u")
+        ax1.set_ylim(self.y_min, self.y_max)
+        ax1.set_xlim(0, 1)
+        ax1.legend()
+        ax1.grid(True)
+        
+        ax2 = save_fig.add_subplot(gs[1])
+        ax2.axis('off')
+        
+        stats_text = self.create_statistics_text(stats)
+        ax2.text(0.05, 0.95, stats_text, 
+                transform=ax2.transAxes, 
+                verticalalignment='top',
+                fontsize=10,
+                bbox=dict(boxstyle="round,pad=0.5", 
+                        facecolor='lightgray', 
+                        edgecolor='gray', 
+                        alpha=0.5))
+        
         options = QFileDialog.Options()
         filename, _ = QFileDialog.getSaveFileName(self, "Сохранить график слоя", "", 
                                                 "PNG (*.png);;JPEG (*.jpg *.jpeg);;PDF (*.pdf);;SVG (*.svg)", 
                                                 options=options)
         if filename:
             try:
-                self.layer_fig.savefig(filename, dpi=300, bbox_inches='tight')
+                save_fig.savefig(filename, dpi=300, bbox_inches='tight')
                 QMessageBox.information(self, "Успех", "График слоя успешно сохранен!")
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении: {str(e)}")
+            finally:
+                plt.close(save_fig)
+        else:
+            plt.close(save_fig)
 
+            
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = BurgersEquationApp()
