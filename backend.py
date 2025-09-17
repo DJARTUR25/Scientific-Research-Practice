@@ -29,7 +29,7 @@ class HeatmapWindow(QMainWindow):
         self.canvas = FigureCanvas(self.fig)
         layout.addWidget(self.canvas)
         
-        self.save_btn = QPushButton("Сохранить тепловую карту")
+        self.save_btn = QPushButton("Сохранить тепловую карту (в формате .png)")
         self.save_btn.clicked.connect(self.save_heatmap)
         layout.addWidget(self.save_btn)
         
@@ -72,17 +72,19 @@ class HeatmapWindow(QMainWindow):
                 QMessageBox.critical(self, "Ошибка", f"Ошибка при сохранении: {str(e)}")
 
 class SolutionTableDialog(QDialog):
-    def __init__(self, solution_data, control_solution, time_points, x_values, parent=None):
+    def __init__(self, solution_data, control_solution, time_points, x_values, Nx, Nt, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Таблица решений и отклонений")
         self.setMinimumSize(1400, 800)
+        self.Nx = Nx
+        self.Nt = Nt
         
         self.tabs = QTabWidget()
         
         # Основная сетка
         self.main_table = QTableWidget()
         self.main_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.main_table.verticalHeader().setVisible(False)  # Убираем нумерацию строк
+        self.main_table.verticalHeader().setVisible(False)
         self.main_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
 
         # Контрольная сетка
@@ -118,7 +120,7 @@ class SolutionTableDialog(QDialog):
     def fill_main_table(self, table, solution_data, time_points, x_values):
         num_layers = len(solution_data)
         num_x = len(x_values)
-        table.setRowCount(num_layers)
+        table.setRowCount(num_layers + 1)  # +1 для строки с номерами узлов
         table.setColumnCount(num_x + 2)  # +2 для номера слоя и времени
 
         # Заголовки
@@ -127,16 +129,24 @@ class SolutionTableDialog(QDialog):
         for col in range(num_x):
             table.setHorizontalHeaderItem(col+2, QTableWidgetItem(f"x={x_values[col]:.4f}"))
 
+        # Строка с номерами узлов
+        table.setItem(0, 0, QTableWidgetItem("Узел"))
+        table.setItem(0, 1, QTableWidgetItem(""))
+        for col in range(num_x):
+            node_item = QTableWidgetItem()
+            node_item.setData(Qt.DisplayRole, f"{col}")
+            table.setItem(0, col+2, node_item)
+
         for row in range(num_layers):
             # Номер слоя
             layer_item = QTableWidgetItem()
             layer_item.setData(Qt.DisplayRole, f"{row}")
-            table.setItem(row, 0, layer_item)
+            table.setItem(row+1, 0, layer_item)
             
             # Время
             time_item = QTableWidgetItem()
             time_item.setData(Qt.DisplayRole, f"{time_points[row]:.6g}")
-            table.setItem(row, 1, time_item)
+            table.setItem(row+1, 1, time_item)
             
             # Значения решения
             for col in range(num_x):
@@ -150,12 +160,12 @@ class SolutionTableDialog(QDialog):
                 else:
                     item.setData(Qt.DisplayRole, f"{val:.6f}")
                 
-                table.setItem(row, col+2, item)
+                table.setItem(row+1, col+2, item)
     
     def fill_comparison_table(self, table, main_data, control_data, time_points, x_values):
         num_layers = len(main_data)
         num_x = len(x_values)
-        table.setRowCount(num_layers)
+        table.setRowCount(num_layers + 1)  # +1 для строки с номерами узлов
         table.setColumnCount(num_x + 5)  # +5 для номера слоя, t, max|u2-u|, i_max, среднее отклонение
 
         # Заголовки
@@ -165,16 +175,27 @@ class SolutionTableDialog(QDialog):
         for col in range(num_x):
             table.setHorizontalHeaderItem(col+5, QTableWidgetItem(f"x={x_values[col]:.4f}"))
 
+        # Строка с номерами узлов
+        table.setItem(0, 0, QTableWidgetItem("Узел"))
+        table.setItem(0, 1, QTableWidgetItem(""))
+        table.setItem(0, 2, QTableWidgetItem(""))
+        table.setItem(0, 3, QTableWidgetItem(""))
+        table.setItem(0, 4, QTableWidgetItem(""))
+        for col in range(num_x):
+            node_item = QTableWidgetItem()
+            node_item.setData(Qt.DisplayRole, f"{col}")
+            table.setItem(0, col+5, node_item)
+
         for row in range(num_layers):
             # Номер слоя
             layer_item = QTableWidgetItem()
             layer_item.setData(Qt.DisplayRole, f"{row}")
-            table.setItem(row, 0, layer_item)
+            table.setItem(row+1, 0, layer_item)
             
             # Время
             time_item = QTableWidgetItem()
             time_item.setData(Qt.DisplayRole, f"{time_points[row]:.6g}")
-            table.setItem(row, 1, time_item)
+            table.setItem(row+1, 1, time_item)
 
             # Расчет отклонений
             diff = np.abs(control_data[row] - main_data[row])
@@ -185,17 +206,17 @@ class SolutionTableDialog(QDialog):
             # Максимальное отклонение
             max_item = QTableWidgetItem()
             max_item.setData(Qt.DisplayRole, f"{max_diff:.6f}")
-            table.setItem(row, 2, max_item)
+            table.setItem(row+1, 2, max_item)
             
-            # Индекс максимального отклонения
+            # Индекс максимального отклонения (правильная нумерация узлов)
             idx_item = QTableWidgetItem()
             idx_item.setData(Qt.DisplayRole, f"{max_idx}")
-            table.setItem(row, 3, idx_item)
+            table.setItem(row+1, 3, idx_item)
             
             # Среднее отклонение
             mean_item = QTableWidgetItem()
             mean_item.setData(Qt.DisplayRole, f"{mean_diff:.6f}")
-            table.setItem(row, 4, mean_item)
+            table.setItem(row+1, 4, mean_item)
             
             # Отклонения по узлам
             for col in range(num_x):
@@ -212,7 +233,11 @@ class SolutionTableDialog(QDialog):
                 if col == max_idx:
                     item.setBackground(Qt.yellow)
                 
-                table.setItem(row, col+5, item)
+                table.setItem(row+1, col+5, item)
+            
+            # Размеры сеток
+            table.setItem(row+1, num_x+5, QTableWidgetItem(f"{self.Nx} x {self.Nt}"))
+            table.setItem(row+1, num_x+6, QTableWidgetItem(f"{2*self.Nx} x {2*self.Nt}"))
     
     def export_to_csv(self):
         try:
@@ -221,13 +246,8 @@ class SolutionTableDialog(QDialog):
             if not base_name:
                 return
             
-            # Экспорт основной сетки
             self.save_table_to_csv(self.main_table, base_name + "_main.csv")
-            
-            # Экспорт контрольной сетки
             self.save_table_to_csv(self.control_table, base_name + "_control.csv")
-            
-            # Экспорт таблицы сравнения
             self.save_table_to_csv(self.comparison_table, base_name + "_comparison.csv")
 
             QMessageBox.information(self, "Успех", "Таблицы успешно экспортированы в CSV файлы!")
@@ -236,13 +256,11 @@ class SolutionTableDialog(QDialog):
     
     def save_table_to_csv(self, table, filename):
         with open(filename, 'w', encoding='utf-8') as f:
-            # Заголовки
             headers = []
             for col in range(table.columnCount()):
                 headers.append(table.horizontalHeaderItem(col).text())
             f.write(",".join(headers) + "\n")
 
-            # Данные
             for row in range(table.rowCount()):
                 row_data = []
                 for col in range(table.columnCount()):
@@ -266,6 +284,8 @@ class ConvectionDiffusionApp(QMainWindow):
         self.global_max_diff = 0.0
         self.y_min, self.y_max = -1.5, 1.5
         self.heatmap_window = None
+        self.Nx = 0
+        self.Nt = 0
         self.initUI()
     
     def initUI(self):
@@ -274,13 +294,15 @@ class ConvectionDiffusionApp(QMainWindow):
         
         self.layer_fig = Figure(figsize=(10, 6))
         self.layer_canvas = FigureCanvas(self.layer_fig)
+        self.layer_canvas.setFocusPolicy(Qt.ClickFocus)
+        self.layer_canvas.setFocus()
 
         main_container = QWidget()
         main_layout = QHBoxLayout(main_container)
 
         left_container = QWidget()
         left_layout = QVBoxLayout(left_container)
-        left_container.setMinimumWidth(400)  # Увеличиваем ширину для статистики
+        left_container.setMinimumWidth(450)
 
         self.T_input = QLineEdit("2.0")
         self.Nx_input = QLineEdit("200")
@@ -300,7 +322,7 @@ class ConvectionDiffusionApp(QMainWindow):
         self.form_layout.addRow(QLabel("Число участков разбиения по оси x (Nx):"), self.Nx_input)
         self.form_layout.addRow(QLabel("Число участков разбиения по оси t (Nt):"), self.Nt_input)
         self.form_layout.addRow(QLabel("Вязкость V, параметр модели:"), self.viscosity_input)
-        self.form_layout.addRow(QLabel("δ (параметр массового оператора):"), self.delta_input)
+        self.form_layout.addRow(QLabel("δ (параметр сглаживающего оператора):"), self.delta_input)
         self.form_layout.addRow(QLabel("Амплитуда А источника:"), self.source_amp_input)
         self.form_layout.addRow(QLabel("Частота (ω) источника:"), self.source_freq_input)
         self.form_layout.addRow(QLabel("№ слоя для показа на графике:"), self.layer_input)
@@ -359,13 +381,12 @@ class ConvectionDiffusionApp(QMainWindow):
         right_container = QWidget()
         right_layout = QVBoxLayout(right_container)
         
-        # Область для отображения уравнения и начального условия
         self.equation_label = QLabel(
             "Уравнение: u_t + u * u_x = V * u_xx + A * sin(ω*t)\n"
             "x ∈ [0, 1]\n"
             "Граничные условия:\n"
             "  При x=0: u_x = 0\n"
-            "  При x=1: u_x + (H/V)*u = (H/V)*u_env, где u_env=2/7, H=7\n"
+            "  При x=1: u_x + (7/V)*u = (7/V)*(2/7)\n"
             "Начальное условие: не задано"
         )
         self.equation_label.setWordWrap(True)
@@ -484,22 +505,29 @@ class ConvectionDiffusionApp(QMainWindow):
 
     def run_simulation(self):
         try:
+            # Проверка шага сохранения
+            save_every_text = self.save_every_input.text()
+            if not save_every_text.isdigit() or int(save_every_text) <= 0:
+                QMessageBox.warning(self, "Ошибка", "Шаг сохранения должен быть целым положительным числом!")
+                return
+            
             T = float(self.T_input.text())
-            Nx = int(self.Nx_input.text())
-            Nt = int(self.Nt_input.text())
+            self.Nx = int(self.Nx_input.text())
+            self.Nt = int(self.Nt_input.text())
             viscosity = float(self.viscosity_input.text())
             delta = float(self.delta_input.text())
+            save_every = int(save_every_text)
             
             L = 1.0
-            h = L / (Nx - 1)
-            x = np.linspace(0, L, Nx)
+            h = L / (self.Nx - 1)
+            x = np.linspace(0, L, self.Nx)
             u0 = self.get_initial_condition(x)
             u_max = np.max(np.abs(u0))
             
             Re_c = u_max * h / viscosity if viscosity > 0 else float('inf')
 
             if Re_c > 2:
-                min_Nx = int(np.ceil(u_max * L / (2 * viscosity)) + 1) if viscosity > 0 else Nx * 4
+                min_Nx = int(np.ceil(u_max * L / (2 * viscosity)) + 1) if viscosity > 0 else self.Nx * 4
                 min_viscosity = u_max * h / 2
 
                 advice = []
@@ -510,7 +538,7 @@ class ConvectionDiffusionApp(QMainWindow):
                 else:
                     advice.append("1. Увеличьте вязкость до {:.4f} или более".format(min_viscosity))
                 
-                advice.append("2. Рассмотрите использование схемы 'upwind' вместо центральных разностей")
+                advice.append("2. Рассмотрите использование схемя 'upwind' вместо центральных разностей")
                 advice.append("3. Увеличьте параметр δ для массового оператора")
                 
                 msg = (
@@ -519,26 +547,23 @@ class ConvectionDiffusionApp(QMainWindow):
                     "Рекомендации для текущих параметров:\n{}"
                 ).format(Re_c, "\n".join(advice))
                 
-                msg_box = QMessageBox(QMessageBox.Warning, "Предупреждение об осцилляциях", msg, 
+                msg_box = QMessageBox(QMessageBox.Warning, "Предуреждание об осцилляциях", msg, 
                                      QMessageBox.Ok | QMessageBox.Cancel, self)
                 
                 if msg_box.exec_() == QMessageBox.Cancel:
                     return
             
-            x, solution, time_points = self.solve_equation(T, Nx, Nt, viscosity, delta)
+            x, solution, time_points = self.solve_equation(T, self.Nx, self.Nt, viscosity, delta, save_every)
             
-            self.solve_control_grid(T, Nx, Nt, viscosity, delta)
+            self.solve_control_grid(T, self.Nx, self.Nt, viscosity, delta, save_every)
 
             self.layer_input.setMaximum(len(self.solution_history)-1)
             self.layer_input.setValue(0)
             self.draw_layer(0)
             self.need_recalculate = False
             
-            n_main = len(self.x_values)
-            m_main = len(self.solution_history)
-            n_control = len(self.control_solution_history[0]) if self.control_solution_history else 0
-            m_control = len(self.control_solution_history) if self.control_solution_history else 0
-            self.stats_grid_size.setText(f"Основная: {n_main}×{m_main}, Контрольная: {n_control}×{m_control}")
+            # Правильный расчет размеров сеток
+            self.stats_grid_size.setText(f"Основная: {self.Nx}×{self.Nt}, Контрольная: {2*self.Nx}×{2*self.Nt}")
 
             # Обновляем отображение уравнения с начальным условием
             ic_type = self.ic_combo.currentText()
@@ -547,7 +572,7 @@ class ConvectionDiffusionApp(QMainWindow):
                 "x ∈ [0, 1]\n"
                 "Граничные условия:\n"
                 "  При x=0: u_x = 0\n"
-                "  При x=1: u_x + (H/V)*u = (H/V)*u_env, где u_env=2/7, H=7\n"
+                "  При x=1: u_x + (7/V)*u = (7/V)*(2/7)\n"
                 f"Начальное условие: {ic_type}"
             )
 
@@ -560,11 +585,10 @@ class ConvectionDiffusionApp(QMainWindow):
             print(f"Ошибка: {e}")
             QMessageBox.critical(self, "Ошибка", f"Ошибка при расчете: {str(e)}")
 
-    def solve_equation(self, T, Nx, Nt, viscosity, delta):
+    def solve_equation(self, T, Nx, Nt, viscosity, delta, save_every):
         L = 1.0
         h = L / (Nx - 1)
         tau = T / Nt
-        save_every = max(1, int(self.save_every_input.text()))
         
         x = np.linspace(0, L, Nx)
         u_n = self.get_initial_condition(x)
@@ -622,10 +646,9 @@ class ConvectionDiffusionApp(QMainWindow):
         self.x_values = x
         return x, u_n, self.time_points
 
-    def solve_control_grid(self, T, Nx, Nt, viscosity, delta):
+    def solve_control_grid(self, T, Nx, Nt, viscosity, delta, save_every):
         Nx2 = 2 * Nx
         Nt2 = 2 * Nt
-        save_every = max(1, int(self.save_every_input.text()))
         
         L = 1.0
         h2 = L / (Nx2 - 1)
@@ -756,6 +779,8 @@ class ConvectionDiffusionApp(QMainWindow):
         ax.set_ylim(self.y_min, self.y_max)
         ax.set_xlim(0, 1)
         ax.grid(True)
+        ax.axvline(x=0, color='k', linestyle='-')
+        ax.axvline(x=1, color='k', linestyle='-')
         self.layer_canvas.draw()
 
     def draw_layer(self, layer_index):
@@ -773,6 +798,10 @@ class ConvectionDiffusionApp(QMainWindow):
             x = self.x_values
             u = self.solution_history[layer_index]
             
+            # Автоматическое масштабирование
+            y_min = np.min(u) - 0.1
+            y_max = np.max(u) + 0.1
+            
             ax.plot(x, u, 'b-', label="Основная сетка")
             
             if self.grid_cb.isChecked() and self.control_solution_history:
@@ -787,11 +816,17 @@ class ConvectionDiffusionApp(QMainWindow):
                 ic = self.get_initial_condition(self.x_values)
                 ax.plot(self.x_values, ic, 'g--', label="Начальное условие")
             
-            ax.set_title(f"Слой {layer_index}, t = {t:.4f} с")
+            # Вычисление номера слоя при шаге сохранения = 1
+            save_every = int(self.save_every_input.text())
+            actual_layer = layer_index * save_every
+            
+            ax.set_title(f"График показательного слоя № {layer_index}, график слоя № {actual_layer}, t = {t:.4f} с")
             ax.set_xlabel("Пространство, x [м]")
             ax.set_ylabel("Теплота, u")
-            ax.set_ylim(self.y_min, self.y_max)
+            ax.set_ylim(y_min, y_max)
             ax.set_xlim(0, 1)
+            ax.axvline(x=0, color='k', linestyle='-')
+            ax.axvline(x=1, color='k', linestyle='-')
             ax.legend()
             ax.grid(True)
             self.layer_canvas.draw()
@@ -821,9 +856,7 @@ class ConvectionDiffusionApp(QMainWindow):
             'max_diff_loc': '-',
             'mean_diff': 0.0,
             'source_val': 0.0,
-            'grid_size': f"Основная: {len(self.x_values)}×{len(self.solution_history)}, "
-                        f"Контрольная: {len(self.control_solution_history[0]) if self.control_solution_history else 0}×"
-                        f"{len(self.control_solution_history) if self.control_solution_history else 0}"
+            'grid_size': f"Основная: {self.Nx}×{self.Nt}, Контрольная: {2*self.Nx}×{2*self.Nt}"
         }
         
         if self.solution_history and self.control_solution_history and layer_index < len(self.solution_history):
@@ -878,6 +911,8 @@ class ConvectionDiffusionApp(QMainWindow):
             control_interp,
             self.time_points,
             self.x_values,
+            self.Nx,
+            self.Nt,
             self
         )
         dialog.exec_()
@@ -916,6 +951,11 @@ class ConvectionDiffusionApp(QMainWindow):
                 t = self.time_points[i]
                 x = self.x_values
                 u = self.solution_history[i]
+                
+                # Автоматическое масштабирование
+                y_min = np.min(u) - 0.1
+                y_max = np.max(u) + 0.1
+                
                 ax.plot(x, u, 'b-', label="Основная сетка")
                 if self.grid_cb.isChecked() and self.control_solution_history:
                     u_control = self.control_solution_history[i]
@@ -927,11 +967,17 @@ class ConvectionDiffusionApp(QMainWindow):
                     ic = self.get_initial_condition(self.x_values)
                     ax.plot(x, ic, 'g--', label="Начальное условие")
                 
-                ax.set_title(f"Слой {i}, t = {t:.4f} с")
+                # Вычисление номера слоя при шаге сохранения = 1
+                save_every = int(self.save_every_input.text())
+                actual_layer = i * save_every
+                
+                ax.set_title(f"График показательного слоя № {i}, график слоя № {actual_layer}, t = {t:.4f} с")
                 ax.set_xlabel("Пространство, x [м]")
                 ax.set_ylabel("Теплота, u")
-                ax.set_ylim(self.y_min, self.y_max)
+                ax.set_ylim(y_min, y_max)
                 ax.set_xlim(0, 1)
+                ax.axvline(x=0, color='k', linestyle='-')
+                ax.axvline(x=1, color='k', linestyle='-')
                 ax.legend()
                 ax.grid(True)
                 
@@ -977,6 +1023,10 @@ class ConvectionDiffusionApp(QMainWindow):
         x = self.x_values
         u = self.solution_history[layer_index]
         
+        # Автоматическое масштабирование
+        y_min = np.min(u) - 0.1
+        y_max = np.max(u) + 0.1
+        
         ax1.plot(x, u, 'b-', label="Основная сетка")
         
         if self.grid_cb.isChecked() and self.control_solution_history:
@@ -989,11 +1039,17 @@ class ConvectionDiffusionApp(QMainWindow):
             ic = self.get_initial_condition(self.x_values)
             ax1.plot(x, ic, 'g--', label="Начальное условие")
         
-        ax1.set_title(f"Слой {layer_index}, t = {t:.4f} с")
+        # Вычисление номера слоя при шаге сохранения = 1
+        save_every = int(self.save_every_input.text())
+        actual_layer = layer_index * save_every
+        
+        ax1.set_title(f"График показательного слоя № {layer_index}, график слоя № {actual_layer}, t = {t:.4f} с")
         ax1.set_xlabel("Пространство, x [м]")
         ax1.set_ylabel("Теплота, u")
-        ax1.set_ylim(self.y_min, self.y_max)
+        ax1.set_ylim(y_min, y_max)
         ax1.set_xlim(0, 1)
+        ax1.axvline(x=0, color='k', linestyle='-')
+        ax1.axvline(x=1, color='k', linestyle='-')
         ax1.legend()
         ax1.grid(True)
         
