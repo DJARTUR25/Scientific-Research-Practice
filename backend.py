@@ -23,7 +23,6 @@ class HelpDialog(QDialog):
         self.setWindowTitle("Справка по программе")
         self.setGeometry(100, 100, 1100, 800)
         
-        # Получаем абсолютный путь к папке с изображениями
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.initial_conditions_dir = os.path.join(self.base_dir, "initial_conditions")
         
